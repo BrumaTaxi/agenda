@@ -26,6 +26,12 @@
   .tagline { margin:4px 0 0; font-size:13px; color:var(--slate-600); font-family:var(--font-serif); font-style:italic; }
   .storage-note { margin-top:10px; font-size:11.5px; color:var(--slate-600); background:var(--mist-100); border-radius:8px; padding:8px 10px; line-height:1.4; }
 
+  .month-nav { display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:12px; }
+  .month-nav button { width:32px; height:32px; border-radius:50%; border:1px solid var(--mist-200); background:var(--white); color:var(--amber-700); font-size:18px; cursor:pointer; }
+  .month-nav button:hover { background:var(--mist-100); }
+  .month-nav span { font-family:var(--font-serif); font-size:15px; font-weight:600; text-transform:capitalize; min-width:150px; text-align:center; }
+  .search-input { width:100%; font-family:var(--font-sans); font-size:15px; padding:10px 12px; border:1px solid var(--mist-200); border-radius:8px; background:var(--white); color:var(--slate-900); margin-bottom:14px; }
+  .search-input:focus { outline:2px solid var(--amber-600); outline-offset:1px; border-color:var(--amber-600); }
   .stats { display:flex; gap:10px; margin-bottom:22px; flex-wrap:wrap; }
   .stat { flex:1; min-width:100px; background:var(--white); border:var(--border); border-radius:var(--radius); padding:12px 14px; }
   .stat-value { font-family:var(--font-serif); font-size:21px; font-weight:600; line-height:1.2; }
@@ -49,6 +55,8 @@
   .tipo-selector { display:flex; gap:8px; flex-wrap:wrap; }
   .tipo-pill { flex:1; min-width:120px; padding:10px 8px; border-radius:8px; border:1px solid var(--mist-200); background:var(--mist-50); color:var(--slate-600); font-family:var(--font-sans); font-size:12.5px; font-weight:600; cursor:pointer; text-align:center; }
   .tipo-pill.active { background:var(--amber-600); border-color:var(--amber-600); color:var(--white); }
+  .pagamento-pill { flex:1; min-width:120px; padding:10px 8px; border-radius:8px; border:1px solid var(--mist-200); background:var(--mist-50); color:var(--slate-600); font-family:var(--font-sans); font-size:12.5px; font-weight:600; cursor:pointer; text-align:center; }
+  .pagamento-pill.active { background:var(--amber-600); border-color:var(--amber-600); color:var(--white); }
 
   .transfer-fieldset { border:1px dashed var(--mist-200); border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:10px; }
   .fieldset-title { font-family:var(--font-serif); font-size:14.5px; font-weight:600; color:var(--slate-900); }
@@ -99,6 +107,7 @@
 
   .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--slate-900); color:var(--white); padding:10px 18px; border-radius:8px; font-size:13px; box-shadow:0 6px 18px rgba(0,0,0,.22); z-index:10; max-width:90%; text-align:center; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -109,7 +118,15 @@
     <p class="storage-note">Os dados ficam salvos neste navegador/aparelho. Use "Exportar backup" de vez em quando para não correr risco de perder informações.</p>
   </header>
 
+  <div class="month-nav">
+    <button type="button" id="mesAnteriorBtn" aria-label="Mês anterior">‹</button>
+    <span id="mesAtualLabel"></span>
+    <button type="button" id="mesProximoBtn" aria-label="Próximo mês">›</button>
+  </div>
   <section class="stats" id="stats"></section>
+  <div style="text-align:center; margin-bottom:18px;">
+    <button type="button" id="exportarRelatorioBtn" class="btn-text-muted">🖨️ Exportar relatório deste mês (.csv)</button>
+  </div>
 
   <section class="new-booking">
     <button class="toggle-form" id="toggleFormBtn" type="button">+ Novo agendamento</button>
@@ -170,6 +187,15 @@
         <div class="field">
           <label for="valor">Valor (opcional)</label>
           <input type="number" id="valor" placeholder="R$" min="0" step="0.01">
+        </div>
+      </div>
+      <div class="field">
+        <label>Forma de pagamento</label>
+        <div class="tipo-selector" id="pagamentoSelector">
+          <button type="button" class="pagamento-pill" data-pagamento="Cartão de Crédito">Cartão de Crédito</button>
+          <button type="button" class="pagamento-pill" data-pagamento="Cartão de Débito">Cartão de Débito</button>
+          <button type="button" class="pagamento-pill" data-pagamento="Pix">Pix</button>
+          <button type="button" class="pagamento-pill" data-pagamento="Dinheiro">Dinheiro</button>
         </div>
       </div>
       <div class="field">
@@ -241,14 +267,20 @@
         <label for="cfgFechamento">Texto de encerramento da mensagem de confirmação</label>
         <textarea id="cfgFechamento" rows="6"></textarea>
       </div>
+      <div class="field">
+        <label for="cfgScriptURL">URL do Google Apps Script (sincroniza com sua planilha)</label>
+        <input type="text" id="cfgScriptURL" placeholder="https://script.google.com/macros/s/.../exec">
+      </div>
       <div class="form-actions">
         <button type="button" class="btn-primary" id="saveSettingsBtn">Salvar configurações</button>
+        <button type="button" class="btn-ghost" id="syncAgoraBtn">🔄 Sincronizar agora</button>
       </div>
     </div>
   </section>
 
   <section class="agenda">
     <h2 class="section-title">Agenda</h2>
+    <input type="text" id="buscaCliente" class="search-input" placeholder="🔍 Buscar por nome ou WhatsApp do cliente...">
     <div id="agendaList" class="agenda-list">Carregando agenda…</div>
   </section>
 
@@ -290,6 +322,7 @@
   function saveMotoristas() {
     try {
       localStorage.setItem(MOTORISTAS_KEY, JSON.stringify(motoristas));
+      syncParaNuvem();
     } catch (e) {
       showToast('Não foi possível salvar o cadastro de motoristas agora.');
     }
@@ -334,6 +367,9 @@
     showToast('Motorista cadastrado.');
   }
 
+  const SCRIPT_URL_KEY = 'brumataxi_script_url';
+  let scriptURL = localStorage.getItem(SCRIPT_URL_KEY) || '';
+
   const CONFIG_KEY = 'brumataxi_config';
   let config = {
     assinaturaNome: 'Juan Mateus',
@@ -349,18 +385,72 @@
     document.getElementById('cfgNome').value = config.assinaturaNome;
     document.getElementById('cfgEmpresa').value = config.assinaturaEmpresa;
     document.getElementById('cfgFechamento').value = config.textoFechamentoConfirmacao;
+    document.getElementById('cfgScriptURL').value = scriptURL;
   }
 
-  function saveConfig() {
+  async function saveConfig() {
+    const novaScriptURL = document.getElementById('cfgScriptURL').value.trim();
+    const urlMudou = novaScriptURL !== scriptURL;
     config.assinaturaNome = document.getElementById('cfgNome').value.trim() || 'Juan Mateus';
     config.assinaturaEmpresa = document.getElementById('cfgEmpresa').value.trim() || 'BrumaTaxi • Transporte Executivo';
     config.textoFechamentoConfirmacao = document.getElementById('cfgFechamento').value.replace(/\n+$/, '');
+    scriptURL = novaScriptURL;
     try {
       localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-      showToast('Configurações salvas.');
+      localStorage.setItem(SCRIPT_URL_KEY, scriptURL);
+      if (urlMudou && scriptURL) {
+        showToast('Conectando à planilha e buscando o que já está lá...');
+        const achou = await carregarDaNuvem(false);
+        showToast(achou ? 'Conectado! Dados da planilha carregados.' : 'Conectado, mas a planilha ainda está vazia.');
+      } else {
+        showToast('Configurações salvas.');
+        syncParaNuvem();
+      }
     } catch (e) {
       showToast('Não foi possível salvar as configurações agora.');
     }
+  }
+
+  async function syncParaNuvem() {
+    if (!scriptURL) return;
+    try {
+      await fetch(scriptURL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ bookings, motoristas, config })
+      });
+    } catch (e) {
+      console.warn('Não foi possível sincronizar com a planilha agora.', e);
+      showToast('⚠️ Falha ao sincronizar com a planilha — dados salvos só neste aparelho por enquanto.');
+    }
+  }
+
+  async function carregarDaNuvem(manual) {
+    if (!scriptURL) {
+      if (manual) showToast('Cadastre a URL do Google Apps Script antes de sincronizar.');
+      return false;
+    }
+    try {
+      const res = await fetch(scriptURL);
+      const dados = await res.json();
+      if (dados && Array.isArray(dados.bookings)) {
+        bookings = dados.bookings;
+        motoristas = dados.motoristas || [];
+        Object.assign(config, dados.config || {});
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(bookings));
+        localStorage.setItem(MOTORISTAS_KEY, JSON.stringify(motoristas));
+        localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+        render();
+        renderMotoristasList();
+        if (manual) showToast('Dados atualizados da planilha.');
+        return true;
+      }
+    } catch (e) {
+      console.warn('Não foi possível carregar da planilha agora.', e);
+      if (manual) showToast('Não foi possível conectar à planilha agora.');
+    }
+    return false;
   }
 
   function loadBookings() {
@@ -376,6 +466,7 @@
   function saveBookings() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(bookings));
+      syncParaNuvem();
     } catch (e) {
       showToast('Não foi possível salvar agora. O navegador pode estar sem espaço.');
     }
@@ -439,6 +530,7 @@
         `Veículo: ${b.out.veiculo || ''}`
       );
     }
+    if (b.formaPagamento) parts.push(`Forma de pagamento combinada: ${b.formaPagamento}`);
     parts.push(config.textoFechamentoConfirmacao);
     parts.push(`Com carinho,\n${config.assinaturaNome}\n*${config.assinaturaEmpresa}*`);
     return parts.join('\n\n');
@@ -448,11 +540,11 @@
     const linhas = [];
     if (b.in) linhas.push(`Transfer In: ${formatDateFull(b.in.data)} às ${b.in.horaChegada || 'horário a confirmar'} (voo ${b.in.voo || 'a confirmar'})`);
     if (b.out) linhas.push(`Transfer Out: ${formatDateFull(b.out.data)} às ${b.out.horaSaida || 'horário a confirmar'} (voo ${b.out.voo || 'a confirmar'})`);
-    return `Olá, ${b.nome}! Passando para lembrar do seu transfer com a BrumaTaxi:\n\n${linhas.join('\n')}\n\nEstaremos no horário combinado. Qualquer dúvida, estou à disposição.\n\nCom carinho,\n${config.assinaturaNome}`;
+    return `Olá, ${b.nome}! Passando para lembrar do seu transfer com a BrumaTaxi:\n\n${linhas.join('\n')}\n\nEstaremos à disposição no horário combinado.\n\nCom carinho,\n${config.assinaturaNome}`;
   }
 
   function reviewMessage(b) {
-    return `Olá, ${b.nome}! Esperamos que sua viagem com a BrumaTaxi tenha sido tranquila. Se puder, deixe sua avaliação — isso nos ajuda muito a melhorar. Obrigado pela confiança!\n\nCom carinho,\n${config.assinaturaNome}\n*${config.assinaturaEmpresa}*`;
+    return `Olá, ${b.nome}! Esperamos que sua viagem com a BrumaTaxi tenha sido tranquila. Se puder, deixe sua avaliação — isso nos ajuda muito a melhorar:\n\nhttps://g.page/r/CeSpJKLSyL0ZEBE/review\n\nObrigado pela confiança!\n\nCom carinho,\n${config.assinaturaNome}\n*${config.assinaturaEmpresa}*`;
   }
 
   function buildDriverInfoForClientMessage(b) {
@@ -613,6 +705,250 @@
     return wrap;
   }
 
+  function pad2(n) { return n.toString().padStart(2, '0'); }
+
+  function toICSDateTime(dateStr, timeStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const [hh, mm] = (timeStr || '09:00').split(':').map(Number);
+    return new Date(y, m - 1, d, hh, mm, 0);
+  }
+
+  function formatICS(dt) {
+    return dt.getFullYear().toString() + pad2(dt.getMonth() + 1) + pad2(dt.getDate()) + 'T' + pad2(dt.getHours()) + pad2(dt.getMinutes()) + '00';
+  }
+
+  function escapeICS(str) {
+    return String(str || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  }
+
+  function buildICSEvent(uid, start, end, summary, location, description) {
+    return [
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${formatICS(new Date())}`,
+      `DTSTART:${formatICS(start)}`,
+      `DTEND:${formatICS(end)}`,
+      `SUMMARY:${escapeICS(summary)}`,
+      `LOCATION:${escapeICS(location)}`,
+      `DESCRIPTION:${escapeICS(description)}`,
+      'BEGIN:VALARM',
+      'TRIGGER:-PT60M',
+      'ACTION:DISPLAY',
+      'DESCRIPTION:Lembrete de transfer',
+      'END:VALARM',
+      'END:VEVENT'
+    ].join('\r\n');
+  }
+
+  function proximoNumeroReserva() {
+    let max = 0;
+    bookings.forEach(x => { if (x.numeroReserva && x.numeroReserva > max) max = x.numeroReserva; });
+    return max + 1;
+  }
+
+  function gerarVoucherPDF(id) {
+    const b = bookings.find(x => x.id === id);
+    if (!b) return;
+    if (typeof window.jspdf === 'undefined') { showToast('Não foi possível carregar o gerador de PDF — confira sua internet e tente de novo.'); return; }
+
+    if (!b.numeroReserva) {
+      b.numeroReserva = proximoNumeroReserva();
+      saveBookings();
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const MARGEM = 20;
+    const CENTRO = pageWidth / 2;
+
+    const PAGINA_BG = [250, 240, 212];
+    const SECAO_BG = [240, 216, 155];
+    const NAVY = [18, 49, 78];
+    const TEXTO = [55, 45, 20];
+
+    doc.setFillColor(...PAGINA_BG);
+    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+
+    let y = 16;
+
+    try {
+      const logoEl = document.querySelector('.logo-img');
+      if (logoEl && logoEl.src) {
+        const logoW = 65, logoH = 26.7;
+        doc.addImage(logoEl.src, 'PNG', CENTRO - logoW / 2, y, logoW, logoH);
+        y += logoH;
+      }
+    } catch (e) { /* segue sem a logo se der algum problema */ }
+    y += 8;
+
+    doc.setDrawColor(...NAVY);
+    doc.setLineWidth(0.5);
+    doc.line(MARGEM + 20, y, pageWidth - MARGEM - 20, y);
+    y += 10;
+
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(...NAVY);
+    doc.text('Voucher de Confirmação de Transfer', CENTRO, y, { align: 'center' });
+    y += 6;
+
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...TEXTO);
+    doc.text('Reserva Nº ' + String(b.numeroReserva).padStart(4, '0'), CENTRO, y, { align: 'center' });
+    y += 10;
+
+    doc.setFontSize(10.5);
+    doc.setTextColor(...NAVY);
+    doc.text(`Cliente:  ${b.nome}          WhatsApp:  ${b.telefone}`, CENTRO, y, { align: 'center' });
+    y += 12;
+
+    const TOP_PAD = 15, LINE_H = 7.2, BOTTOM_PAD = 9;
+
+    function desenharSecao(titulo, campos) {
+      const altura = TOP_PAD + (campos.length - 1) * LINE_H + BOTTOM_PAD;
+      doc.setFillColor(...SECAO_BG);
+      doc.roundedRect(MARGEM, y, pageWidth - 2 * MARGEM, altura, 3, 3, 'F');
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(...NAVY);
+      doc.text(titulo, MARGEM + 6, y + 9);
+      let yy = y + TOP_PAD;
+      campos.forEach(([label, valor]) => {
+        doc.setFont(undefined, 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(...NAVY);
+        doc.text(label + ':', MARGEM + 6, yy);
+        doc.setFont(undefined, 'normal');
+        doc.setTextColor(...TEXTO);
+        doc.text(String(valor || '-'), MARGEM + 42, yy);
+        yy += LINE_H;
+      });
+      y += altura + 8;
+    }
+
+    if (b.in) {
+      desenharSecao('TRANSFER IN', [
+        ['Data', formatDateFull(b.in.data)],
+        ['Voo', b.in.voo],
+        ['Horário previsto', b.in.horaChegada],
+        ['Origem', b.in.origem],
+        ['Destino', b.in.destino],
+        ['Passageiros', b.in.passageiros]
+      ]);
+    }
+    if (b.out) {
+      desenharSecao('TRANSFER OUT', [
+        ['Data', formatDateFull(b.out.data)],
+        ['Origem', b.out.origem],
+        ['Destino', b.out.destino],
+        ['Horário de saída', b.out.horaSaida],
+        ['Voo', b.out.voo],
+        ['Passageiros', b.out.passageiros]
+      ]);
+    }
+
+    doc.setDrawColor(...NAVY);
+    doc.setLineWidth(0.5);
+    doc.line(MARGEM + 20, y, pageWidth - MARGEM - 20, y);
+    y += 8;
+
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...TEXTO);
+    const linhasFechamento = config.textoFechamentoConfirmacao
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0 && !l.toLowerCase().includes('motorista'));
+    linhasFechamento.forEach(linha => {
+      doc.text(linha, CENTRO, y, { align: 'center' });
+      y += 5;
+    });
+
+    y += 6;
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(...NAVY);
+    doc.text(config.assinaturaNome, CENTRO, y, { align: 'center' });
+    y += 5;
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(9);
+    doc.text(config.assinaturaEmpresa, CENTRO, y, { align: 'center' });
+    y += 5;
+    doc.text('Contato: (31) 99603-3244', CENTRO, y, { align: 'center' });
+
+    doc.save('voucher-' + b.nome.replace(/\s+/g, '-') + '.pdf');
+    showToast('Voucher gerado — anexe manualmente no WhatsApp.');
+  }
+
+  function downloadICS(id) {
+    const b = bookings.find(x => x.id === id);
+    if (!b) return;
+    const eventos = [];
+    if (b.in && b.in.data) {
+      const start = toICSDateTime(b.in.data, b.in.horaChegada);
+      const end = new Date(start.getTime() + 60 * 60000);
+      const desc = `Cliente: ${b.nome}\nTelefone: ${b.telefone}\nVoo: ${b.in.voo || 'a confirmar'}\nPassageiros: ${b.in.passageiros || ''}`;
+      eventos.push(buildICSEvent(b.id + '-in@brumataxi', start, end, `BrumaTaxi - Transfer In - ${b.nome}`, `${b.in.origem} -> ${b.in.destino}`, desc));
+    }
+    if (b.out && b.out.data) {
+      const start = toICSDateTime(b.out.data, b.out.horaSaida);
+      const end = new Date(start.getTime() + 60 * 60000);
+      const desc = `Cliente: ${b.nome}\nTelefone: ${b.telefone}\nVoo: ${b.out.voo || 'a confirmar'}\nPassageiros: ${b.out.passageiros || ''}`;
+      eventos.push(buildICSEvent(b.id + '-out@brumataxi', start, end, `BrumaTaxi - Transfer Out - ${b.nome}`, `${b.out.origem} -> ${b.out.destino}`, desc));
+    }
+    if (eventos.length === 0) { showToast('Preencha ao menos uma data válida antes de gerar o evento.'); return; }
+    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//BrumaTaxi//Agenda//PT', 'CALSCALE:GREGORIAN', ...eventos, 'END:VCALENDAR'].join('\r\n');
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `transfer-${b.nome.replace(/\s+/g, '-')}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Arquivo gerado — abra para adicionar à sua agenda.');
+  }
+
+  function exportarRelatorioMes() {
+    const now = mesVisualizado;
+    const monthBookings = bookings.filter(b => {
+      const dataRef = groupDate(b);
+      if (!dataRef) return false;
+      const d = new Date(dataRef + 'T00:00:00');
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+
+    if (monthBookings.length === 0) { showToast('Nenhum agendamento nesse mês para exportar.'); return; }
+
+    const linhas = [['Data', 'Cliente', 'WhatsApp', 'Tipo', 'Status', 'Forma de pagamento', 'Valor do cliente (R$)', 'Motorista', 'Valor livre do motorista (R$)', 'Lucro (R$)']];
+    monthBookings.forEach(b => {
+      linhas.push([
+        formatDateFull(groupDate(b)),
+        b.nome,
+        b.telefone,
+        tipoLabel(b),
+        statusLabel(b.status),
+        b.formaPagamento || '',
+        receitaBooking(b) ? receitaBooking(b).toFixed(2).replace('.', ',') : '',
+        b.motorista ? b.motorista.nome : '',
+        b.motorista && b.motorista.valorLivre ? Number(b.motorista.valorLivre).toFixed(2).replace('.', ',') : '',
+        b.status === 'concluido' ? lucroBooking(b).toFixed(2).replace('.', ',') : ''
+      ]);
+    });
+
+    const csv = linhas.map(linha => linha.map(campo => `"${String(campo).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `relatorio-brumataxi-${now.getFullYear()}-${pad2(now.getMonth() + 1)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Relatório exportado.');
+  }
+
   function statusLabel(s) {
     return { pendente: 'Pendente confirmação', confirmado: 'Confirmado', concluido: 'Concluída' }[s] || s;
   }
@@ -663,8 +999,10 @@
     return 0; // tem motorista com valor a receber mas sem valor livre informado — não dá pra calcular a margem
   }
 
+  let mesVisualizado = new Date();
+
   function renderStats() {
-    const now = new Date();
+    const now = mesVisualizado;
     const monthBookings = bookings.filter(b => {
       const dataRef = groupDate(b);
       if (!dataRef) return false;
@@ -677,6 +1015,8 @@
     const lucro = concluidas.reduce((s, b) => s + lucroBooking(b), 0);
     const pagoMotoristas = concluidas.reduce((s, b) => s + (b.motorista && b.motorista.valorLivre ? Number(b.motorista.valorLivre) : 0), 0);
     const corridasComMotorista = monthBookings.filter(b => b.motorista).length;
+
+    document.getElementById('mesAtualLabel').textContent = mesVisualizado.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
 
     const statsEl = document.getElementById('stats');
     statsEl.innerHTML = '';
@@ -713,8 +1053,12 @@
 
     if (b.valor) {
       const valor = document.createElement('div'); valor.className = 'card-leg';
-      valor.textContent = 'Valor: R$ ' + Number(b.valor).toFixed(2).replace('.', ',');
+      valor.textContent = 'Valor: R$ ' + Number(b.valor).toFixed(2).replace('.', ',') + (b.formaPagamento ? ' · ' + b.formaPagamento : '');
       card.appendChild(valor);
+    } else if (b.formaPagamento) {
+      const pag = document.createElement('div'); pag.className = 'card-leg';
+      pag.textContent = 'Pagamento: ' + b.formaPagamento;
+      card.appendChild(pag);
     }
     if (b.obs) {
       const obs = document.createElement('div'); obs.className = 'card-obs'; obs.textContent = b.obs;
@@ -735,6 +1079,8 @@
     if (b.status === 'concluido' && !b.avaliacaoSolicitada) {
       actions.appendChild(makeButton('Pedir avaliação', 'whatsapp-btn', () => sendWhatsApp(b.id, 'review')));
     }
+    actions.appendChild(makeButton('📄 Gerar voucher PDF', '', () => gerarVoucherPDF(b.id)));
+    actions.appendChild(makeButton('📅 Adicionar à agenda', '', () => downloadICS(b.id)));
     actions.appendChild(makeButton('Editar', '', () => startEdit(b.id)));
     actions.appendChild(makeButton('Excluir', 'danger-btn', (e) => confirmDelete(b.id, e.target)));
 
@@ -774,16 +1120,24 @@
     return card;
   }
 
+  let filtroTexto = '';
+
+  function bateComFiltro(b) {
+    if (!filtroTexto) return true;
+    const alvo = (b.nome + ' ' + b.telefone).toLowerCase();
+    return alvo.includes(filtroTexto.toLowerCase());
+  }
+
   function render() {
     renderStats();
 
-    const active = bookings.filter(b => b.status !== 'concluido').sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
-    const done = bookings.filter(b => b.status === 'concluido').sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+    const active = bookings.filter(b => b.status !== 'concluido' && bateComFiltro(b)).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+    const done = bookings.filter(b => b.status === 'concluido' && bateComFiltro(b)).sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
 
     const agendaList = document.getElementById('agendaList');
     agendaList.innerHTML = '';
     if (active.length === 0) {
-      agendaList.innerHTML = '<div class="empty-state">Nenhum transfer agendado ainda. Toque em "Novo agendamento" para começar.</div>';
+      agendaList.innerHTML = filtroTexto ? '<div class="empty-state">Nenhum resultado para essa busca.</div>' : '<div class="empty-state">Nenhum transfer agendado ainda. Toque em "Novo agendamento" para começar.</div>';
     } else {
       let lastDate = null;
       active.forEach(b => {
@@ -842,6 +1196,14 @@
     pill.addEventListener('click', () => setTipo(pill.dataset.tipo));
   });
 
+  let pagamentoSelecionado = '';
+  document.querySelectorAll('.pagamento-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      pagamentoSelecionado = pill.dataset.pagamento;
+      document.querySelectorAll('.pagamento-pill').forEach(p => p.classList.toggle('active', p === pill));
+    });
+  });
+
   function dataBRParaISO(str) {
     if (!str) return '';
     const m = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
@@ -852,7 +1214,7 @@
   function parseReservaTexto(texto) {
     const linhas = texto.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     let secao = null;
-    const result = { nome: '', telefone: '', obs: '', in: null, out: null };
+    const result = { nome: '', telefone: '', obs: '', formaPagamento: '', in: null, out: null };
 
     function garanteIn() { if (!result.in) result.in = { data: '', voo: '', horaChegada: '', origem: '', destino: '', passageiros: '' }; return result.in; }
     function garanteOut() { if (!result.out) result.out = { data: '', voo: '', horaSaida: '', origem: '', destino: '', passageiros: '' }; return result.out; }
@@ -871,6 +1233,7 @@
       if (chave.includes('cliente')) { result.nome = valor; return; }
       if (chave.includes('whatsapp')) { result.telefone = valor; return; }
       if (chave.includes('observ')) { result.obs = valor; return; }
+      if (chave.includes('forma de pagamento')) { result.formaPagamento = valor; return; }
       if (chave.includes('horario previsto de chegada')) { garanteIn().horaChegada = valor; return; }
       if (chave.includes('horario de saida')) { garanteOut().horaSaida = valor; return; }
       if (chave === 'data') { if (secao === 'in') garanteIn().data = valor; else if (secao === 'out') garanteOut().data = valor; return; }
@@ -923,6 +1286,8 @@
       document.getElementById('outPassageiros').value = dados.out.passageiros || '';
     }
     document.getElementById('obs').value = dados.obs || '';
+    pagamentoSelecionado = dados.formaPagamento || '';
+    document.querySelectorAll('.pagamento-pill').forEach(p => p.classList.toggle('active', p.dataset.pagamento === pagamentoSelecionado));
 
     document.getElementById('pasteReservaInput').value = '';
     document.getElementById('pastePanel').classList.add('hidden');
@@ -960,6 +1325,8 @@
     }
     document.getElementById('valor').value = b.valor || '';
     document.getElementById('obs').value = b.obs || '';
+    pagamentoSelecionado = b.formaPagamento || '';
+    document.querySelectorAll('.pagamento-pill').forEach(p => p.classList.toggle('active', p.dataset.pagamento === pagamentoSelecionado));
 
     document.getElementById('submitBtn').textContent = 'Salvar alterações';
     document.getElementById('cancelEditBtn').classList.remove('hidden');
@@ -1005,6 +1372,8 @@
     editingId = null;
     document.getElementById('bookingForm').reset();
     setTipo('both');
+    pagamentoSelecionado = '';
+    document.querySelectorAll('.pagamento-pill').forEach(p => p.classList.remove('active'));
     document.getElementById('inOrigem').value = 'Aeroporto de Confins (CNF)';
     document.getElementById('inDestino').value = 'Clara Arte Resort';
     document.getElementById('outOrigem').value = 'Clara Arte Resort';
@@ -1067,6 +1436,7 @@
     const telefone = document.getElementById('telefone').value.trim();
     const valor = document.getElementById('valor').value;
     const obs = document.getElementById('obs').value.trim();
+    const formaPagamento = pagamentoSelecionado;
 
     if (!nome || !telefone) { showToast('Preencha cliente e WhatsApp.'); return; }
 
@@ -1101,7 +1471,7 @@
 
     if (editingId) {
       const b = bookings.find(x => x.id === editingId);
-      Object.assign(b, { nome, telefone, in: inLeg, out: outLeg, valor, obs });
+      Object.assign(b, { nome, telefone, in: inLeg, out: outLeg, valor, obs, formaPagamento });
       editingId = null;
       document.getElementById('submitBtn').textContent = 'Salvar agendamento';
       document.getElementById('cancelEditBtn').classList.add('hidden');
@@ -1109,7 +1479,7 @@
     } else {
       bookings.push({
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-        nome, telefone, in: inLeg, out: outLeg, valor, obs,
+        nome, telefone, in: inLeg, out: outLeg, valor, obs, formaPagamento,
         status: 'pendente', motorista: null,
         confirmacaoEnviada: false, lembreteEnviado: false, avaliacaoSolicitada: false,
         criadoEm: new Date().toISOString()
@@ -1121,6 +1491,8 @@
     render();
     this.reset();
     setTipo('both');
+    pagamentoSelecionado = '';
+    document.querySelectorAll('.pagamento-pill').forEach(p => p.classList.remove('active'));
     document.getElementById('inOrigem').value = 'Aeroporto de Confins (CNF)';
     document.getElementById('inDestino').value = 'Clara Arte Resort';
     document.getElementById('outOrigem').value = 'Clara Arte Resort';
@@ -1146,11 +1518,35 @@
   });
 
   document.getElementById('saveSettingsBtn').addEventListener('click', saveConfig);
+  document.getElementById('syncAgoraBtn').addEventListener('click', () => carregarDaNuvem(true));
 
-  setTipo('both');
-  loadConfig();
-  loadMotoristas();
-  loadBookings();
+  document.getElementById('mesAnteriorBtn').addEventListener('click', () => {
+    mesVisualizado = new Date(mesVisualizado.getFullYear(), mesVisualizado.getMonth() - 1, 1);
+    renderStats();
+  });
+  document.getElementById('mesProximoBtn').addEventListener('click', () => {
+    mesVisualizado = new Date(mesVisualizado.getFullYear(), mesVisualizado.getMonth() + 1, 1);
+    renderStats();
+  });
+
+  document.getElementById('exportarRelatorioBtn').addEventListener('click', exportarRelatorioMes);
+
+  document.getElementById('buscaCliente').addEventListener('input', (e) => {
+    filtroTexto = e.target.value;
+    render();
+  });
+
+  async function iniciar() {
+    setTipo('both');
+    loadConfig();
+    loadMotoristas();
+    loadBookings();
+    if (scriptURL) {
+      await carregarDaNuvem(false);
+    }
+  }
+  iniciar();
 </script>
+
 </body>
 </html>
