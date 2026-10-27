@@ -109,7 +109,10 @@
 
   /* ===== Camada de gestão (acrescentada) ===== */
   #gestao { margin-bottom:18px; }
-  #gestaoPanel .stats { margin-bottom:6px; }
+  #gestaoPanel .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); gap:10px; margin-bottom:8px; }
+  #gestaoPanel .stat { min-width:0; padding:10px 12px; }
+  #gestaoPanel .stat-value { font-size:17px; overflow-wrap:anywhere; }
+  #gestaoPanel .stat-label { overflow-wrap:anywhere; }
   .fin-box { margin-top:12px; padding-top:12px; border-top:1px dashed var(--mist-200); }
   .fin-title { font-family:var(--font-serif); font-size:13.5px; font-weight:600; }
   .fin-line { font-size:12.5px; color:var(--slate-600); margin-top:4px; line-height:1.45; }
@@ -1725,9 +1728,12 @@
     st.appendChild(statCard(brl(recebidoMes), 'recebido no mês'));
     st.appendChild(statCard(brl(somar(lista, x => Math.max(0, x[1].saldo))), 'a receber dos clientes'));
     st.appendChild(statCard(brl(somar(lista, x => x[1].aPagarMot)), 'a pagar a motoristas'));
-    st.appendChild(statCard(brl(somar(lista, x => x[1].margem)), 'margem estimada'));
+    const completos = lista.filter(x => x[1].contratado > 0 && x[0].motorista && x[1].custoMot > 0);
+    const incompletos = lista.filter(x => x[1].contratado > 0 && !(x[0].motorista && x[1].custoMot > 0));
+    st.appendChild(statCard(brl(somar(completos, x => x[1].margem)), 'margem estimada (só corridas com valor livre informado)'));
     st.appendChild(statCard(brl(somar(lista, x => x[1].com + x[1].desp)), 'comissões e despesas'));
     el.appendChild(st);
+    if (incompletos.length) { const a = document.createElement('div'); a.className = 'fin-alerta'; a.textContent = '⚠️ ' + incompletos.length + ' corrida(s) sem motorista ou sem o valor livre do motorista ficaram fora da margem (' + brl(somar(incompletos, x => x[1].contratado)) + ' contratados). Preencha em “Dados do motorista” para a margem ficar completa.'; el.appendChild(a); }
     const pend = lista.filter(x => x[1].saldo > 0 && x[1].contratado > 0);
     const devMot = {};
     lista.forEach(([b, r]) => { if (r.aPagarMot > 0 && b.motorista) devMot[b.motorista.nome] = (devMot[b.motorista.nome] || 0) + r.aPagarMot; });
@@ -1741,6 +1747,7 @@
     const pg = document.createElement('div'); pg.className = 'fin-line'; pg.textContent = 'Pago a motoristas neste mês (por data de pagamento): ' + brl(pagoMes); el.appendChild(pg);
     const ac = document.createElement('div'); ac.className = 'card-actions';
     ac.appendChild(makeButton('Exportar financeiro do mês (.csv)', '', exportarFinanceiroMes));
+    ac.appendChild(makeButton('✅ Acertar corridas antigas…', '', acertarAntigas));
     el.appendChild(ac);
   }
   const _renderStats = renderStats;
@@ -1758,6 +1765,26 @@
     a.click(); URL.revokeObjectURL(url); showToast('Financeiro exportado.');
   }
   document.getElementById('toggleGestaoBtn').addEventListener('click', () => document.getElementById('gestaoPanel').classList.toggle('hidden'));
+  // --- acerto único das corridas antigas (criadas antes do controle financeiro) ---
+  // Só age sobre corridas CONCLUÍDAS até a data informada e que ainda não têm nenhum registro financeiro.
+  function acertarAntigas() {
+    const corte = prompt('Corridas CONCLUÍDAS até qual data já foram pagas pelo cliente e ao motorista? (AAAA-MM-DD)\n\nSó entram corridas sem nenhum registro financeiro. Nada é alterado antes da sua confirmação.', hojeBR());
+    if (corte === null) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(corte.trim())) { showToast('Data inválida. Use AAAA-MM-DD.'); return; }
+    const alvo = bookings.filter(b => b.status === 'concluido' && groupDate(b) && groupDate(b) <= corte.trim()).map(b => [b, resumoFin(b)]);
+    const rec = alvo.filter(([b, r]) => r.contratado > 0 && r.recebido === 0 && !(b.fin && (b.fin.recebimentos || []).length));
+    const pag = alvo.filter(([b, r]) => r.custoMot > 0 && r.pago === 0 && !(b.fin && (b.fin.pagamentos || []).length));
+    if (!rec.length && !pag.length) { showToast('Nenhuma corrida antiga para acertar.'); return; }
+    let fezRec = false, fezPag = false;
+    if (rec.length && confirm('Registrar como RECEBIDO do cliente ' + rec.length + ' corrida(s) concluída(s) até ' + corte + ', total ' + brl(somar(rec, x => x[1].contratado)) + '?\n\nCada registro usa a data da viagem e fica marcado como “acerto de corrida antiga”. Você pode estornar um a um.')) {
+      rec.forEach(([b, r]) => finDe(b).recebimentos.push({ id: novoId(), valor: r.contratado, forma: b.formaPagamento || 'Não informado', data: groupDate(b), legado: true })); fezRec = true;
+    }
+    if (pag.length && confirm('Registrar como PAGO ao motorista ' + pag.length + ' corrida(s) concluída(s) até ' + corte + ', total ' + brl(somar(pag, x => x[1].custoMot)) + '?')) {
+      pag.forEach(([b, r]) => finDe(b).pagamentos.push({ id: novoId(), valor: r.custoMot, forma: 'Não informado', data: groupDate(b), legado: true })); fezPag = true;
+    }
+    if (fezRec || fezPag) { saveBookings(); render(); showToast('Corridas antigas acertadas.'); }
+  }
+
   // --- proteção contra agendamentos duplicados ---
   function dedupePorId(arr) {
     if (!Array.isArray(arr)) return [];
